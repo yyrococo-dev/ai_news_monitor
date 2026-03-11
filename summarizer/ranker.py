@@ -65,7 +65,7 @@ def _novelty_score(url: str) -> float:
 def score_item(item: Dict) -> float:
     # weights
     w_source = 3.0
-    w_keyword = 2.5
+    w_keyword = 4.5  # increased weight to prioritize AI/coding keywords
     w_novel = 2.0
     w_recency = 1.5
     w_pop = 1.0
@@ -98,22 +98,52 @@ def rank_items(items: List[Dict], top_k: int = None) -> List[Tuple[Dict,float]]:
     # apply diversity: avoid more than 2 items from same domain in top_k
     selected = []
     domain_count = {}
+    ai_related = []
+    non_ai = []
     for it, sc in scored:
-        if len(selected) >= top_k:
-            break
-        domain = ''
-        try:
-            from urllib.parse import urlparse
-            domain = urlparse(it.get('url') or '').netloc
-        except Exception:
+        # classify as ai-related via keyword match
+        kscore = _keyword_match_score((it.get('title') or '') + ' ' + (it.get('snippet') or ''))
+        if kscore > 0:
+            ai_related.append((it, sc))
+        else:
+            non_ai.append((it, sc))
+
+    # ensure at least min_ai items (env AI_MIN_AI_IN_TOP, default 3)
+    min_ai = int(os.environ.get('AI_MIN_AI_IN_TOP','3'))
+    # pick ai items first with diversity
+    def pick_from_list(source_list, limit, selected, domain_count):
+        for it, sc in source_list:
+            if len(selected) >= limit:
+                break
             domain = ''
-        if domain:
-            cnt = domain_count.get(domain,0)
-            if cnt >= 2:
+            try:
+                from urllib.parse import urlparse
+                domain = urlparse(it.get('url') or '').netloc
+            except Exception:
+                domain = ''
+            if domain:
+                cnt = domain_count.get(domain,0)
+                if cnt >= 2:
+                    continue
+                domain_count[domain] = cnt+1
+            selected.append((it, sc))
+        return selected
+
+    selected = pick_from_list(ai_related, top_k, selected, domain_count)
+    if len(selected) < min_ai:
+        # if not enough ai items found, try filling with top ai_related ignoring diversity
+        for it, sc in ai_related:
+            if (it, sc) in selected:
                 continue
-            domain_count[domain] = cnt+1
-        selected.append((it, sc))
-    # if diversity pruned too many, fill remaining from scored
+            selected.append((it, sc))
+            if len(selected) >= min_ai:
+                break
+
+    # fill remaining slots with non-ai items respecting diversity
+    if len(selected) < top_k:
+        selected = pick_from_list(non_ai, top_k, selected, domain_count)
+
+    # if still short, fill from scored list
     if len(selected) < top_k:
         for it, sc in scored:
             if (it, sc) in selected:

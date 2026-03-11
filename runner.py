@@ -36,15 +36,13 @@ def main():
         print('no items to summarize')
         return
 
-    # batching
-    chunks = batch_requestor.chunk_items(normalized, max_items=20)
+    # batching - prefer token-based batching
+    use_token = True
+    chunks = batch_requestor.chunk_items(normalized, use_token=use_token, target_tokens=3000)
     summaries = []
-    for chunk in chunks:
-        if args.use_llm:
-            s = llm_client.summarize_batch(chunk, prompt_name='summarize.daily')
-        else:
-            # prefer llm if key present
-            s = llm_client.summarize_batch(chunk, prompt_name='summarize.daily')
+    for i, chunk in enumerate(chunks):
+        print(f'Processing chunk {i+1}/{len(chunks)} with {len(chunk)} items')
+        s = llm_client.summarize_batch(chunk, prompt_name='summarize.daily')
         summaries.append(s)
 
     final_summary = '\n\n---\n\n'.join(summaries)

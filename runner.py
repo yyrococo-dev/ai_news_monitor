@@ -43,9 +43,12 @@ def main():
     target_tokens = int(os.environ.get('AI_SUMMARY_TARGET_TOKENS', '3000'))
     chunks = batch_requestor.chunk_items(normalized, use_token=use_token, target_tokens=target_tokens, max_calls=max_calls)
     summaries = []
+    from core.notifier import notify_run
     for i, chunk in enumerate(chunks):
         print(f'Processing chunk {i+1}/{len(chunks)} with {len(chunk)} items')
-        s = llm_client.summarize_batch(chunk, prompt_name='summarize.daily')
+        run_name = f'chunk-{i+1}-of-{len(chunks)}'
+        with notify_run(name=run_name):
+            s = llm_client.summarize_batch(chunk, prompt_name='summarize.daily')
         summaries.append(s)
 
     final_summary = '\n\n---\n\n'.join(summaries)

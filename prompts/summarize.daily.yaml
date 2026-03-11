@@ -1,0 +1,8 @@
+# Prompt template for daily summarization
+# name: summarize.daily
+system: |
+  You are a concise summarizer. Given a list of news items (title, url, snippet), produce a short summary (3-6 sentences) covering the main developments and an ordered list of sources with one-line notes each.
+user: |
+  Summarize the following items for a daily briefing. Keep the summary factual and neutral. Then list sources with a one-line note each.
+length: short
+max_output_tokens: 800

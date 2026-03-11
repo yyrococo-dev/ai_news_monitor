@@ -58,8 +58,34 @@ def main():
     for it, sc in ranked:
         print(' -', (it.get('title') or '')[:120], 'score=', sc)
 
-    # Summarize top-K with llm_client (fallback will be used if no key)
-    top_items = [it for it, sc in ranked]
+    # Before summarizing, insert new items into sent_items (PENDING) and filter since_last_run
+    import sqlite3, time
+    DB = os.path.join(os.path.expanduser('~'),'dev','ai_news_monitor','storage.db')
+    conn = sqlite3.connect(DB)
+    cur = conn.cursor()
+    new_top_items = []
+    for it in [it for it, sc in ranked]:
+        url = it.get('url')
+        cur.execute('SELECT 1 FROM sent_items WHERE url=? LIMIT 1', (url,))
+        if cur.fetchone():
+            # already seen, skip inserting but keep for potential summarization
+            new_top_items.append(it)
+            continue
+        # insert as PENDING
+        now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        try:
+            cur.execute('INSERT INTO sent_items (source,url,title,summary,published_at,fetched_at,status) VALUES (?,?,?,?,?,?,?)', (
+                it.get('source') or it.get('feed') or '', url, it.get('title') or '', it.get('snippet') or '', it.get('published_at') or '', now, 'PENDING'
+            ))
+            conn.commit()
+            new_top_items.append(it)
+        except Exception:
+            conn.rollback()
+            new_top_items.append(it)
+    conn.close()
+
+    top_items = new_top_items
+
     from core.notifier import notify_run
     with notify_run(name='summarize-top-k'):
         summary_text = llm_client.summarize_batch(top_items, prompt_name='summarize.daily')
@@ -68,8 +94,22 @@ def main():
     others = [it for it in normalized if it not in top_items]
     headlines = '\n'.join(['- ' + (it.get('title') or '') + ' (' + (it.get('url') or '') + ')' for it in others[:20]])
 
-    # combine
-    final_summary = summary_text + '\n\n---\n\n' + 'Other headlines:\n' + headlines
+    # Produce a Korean-wrapped summary (simple template for now)
+    def make_korean_summary(top_items, summary_text):
+        lines = []
+        lines.append('오늘의 핵심 뉴스:')
+        for idx, it in enumerate(top_items, start=1):
+            title = it.get('title') or ''
+            url = it.get('url') or ''
+            snippet = it.get('snippet') or ''
+            lines.append(f"{idx}. {title}\n   링크: {url}\n   요약(영문 원문): {snippet}")
+        lines.append('\n세부 요약(LLM/로컬):')
+        lines.append(summary_text)
+        lines.append('\n기타 헤드라인:')
+        lines.append(headlines)
+        return '\n\n'.join(lines)
+
+    final_summary = make_korean_summary(top_items, summary_text)
 
     if args.dry_run:
         print('DRY RUN SUMMARY:\n')

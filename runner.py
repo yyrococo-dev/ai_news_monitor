@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 import argparse
+import logging
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
+
 from storage.schema import init_db
 from collectors.rss_collector import RSSCollector
 from aggregator.dedupe import normalize_url
-import os
-
 from summarizer import llm_client
 from summarizer import batch_requestor
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -88,32 +95,58 @@ def main():
 
     from core.notifier import notify_run
     with notify_run(name='summarize-top-k'):
-        summary_text = llm_client.summarize_batch(top_items, prompt_name='summarize.daily')
+        if args.use_llm:
+            logger.info('--use-llm flag set: using Gemini API for summarization')
+            summary_text = llm_client.summarize_batch(top_items, prompt_name='summarize.daily')
+        else:
+            logger.info('--use-llm not set: using local fallback summarizer')
+            from summarizer.local_fallback_summarizer import summarize_items
+            summary_text = summarize_items(top_items)
 
     # For rest, produce a short headlines list
     others = [it for it in normalized if it not in top_items]
     headlines = '\n'.join(['- ' + (it.get('title') or '') + ' (' + (it.get('url') or '') + ')' for it in others[:20]])
 
-    # Produce a Korean-wrapped summary (simple template for now)
-    def make_korean_summary(top_items, summary_text):
-        lines = []
-        lines.append('오늘의 핵심 뉴스:')
+    # Produce a compact Korean summary: one-paragraph per item
+    def make_compact_summary(top_items, summary_text):
+        parts = []
+        parts.append('오늘의 핵심 뉴스 (요약은 한국어):')
+        # assume summary_text contains per-item paragraphs in order; if not, we include brief snippet
         for idx, it in enumerate(top_items, start=1):
-            title = it.get('title') or ''
+            title = (it.get('title') or '').strip()
             url = it.get('url') or ''
-            snippet = it.get('snippet') or ''
-            lines.append(f"{idx}. {title}\n   링크: {url}\n   요약(영문 원문): {snippet}")
-        lines.append('\n세부 요약(LLM/로컬):')
-        lines.append(summary_text)
-        lines.append('\n기타 헤드라인:')
-        lines.append(headlines)
-        return '\n\n'.join(lines)
+            # try to extract per-item paragraph from summary_text by splitting paragraphs
+            para = ''
+            try:
+                paras = [p.strip() for p in summary_text.split('\n') if p.strip()]
+                if len(paras) >= idx:
+                    para = paras[idx-1]
+            except Exception:
+                para = ''
+            if not para:
+                para = (it.get('snippet') or '')[:200]
+            parts.append(f"{idx}) {title} — {para} 링크: {url}")
+        # add short other headlines list
+        if headlines:
+            parts.append('\n기타 헤드라인:')
+            parts.append(headlines)
+        return '\n\n'.join(parts)
 
-    final_summary = make_korean_summary(top_items, summary_text)
+    final_summary = make_compact_summary(top_items, summary_text)
 
     if args.dry_run:
         print('DRY RUN SUMMARY:\n')
-        print(final_summary[:3000])
+        print(final_summary[:4000])
+    else:
+        # send via Telegram deliverer if creds present
+        from deliver.telegram_deliver import TelegramDeliver
+        td = TelegramDeliver()
+        if not td.token:
+            print('No TELEGRAM_BOT_TOKEN found in environment; skipping send')
+            return
+        # sanitize HTML in summaries
+        results = td.deliver(final_summary, items=normalized, html=False, dry_run=False)
+        print('Delivered, results count:', len(results))
     else:
         # send via Telegram deliverer if creds present
         from deliver.telegram_deliver import TelegramDeliver

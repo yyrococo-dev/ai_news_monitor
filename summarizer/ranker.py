@@ -72,7 +72,7 @@ def score_item(item: Dict) -> float:
 
     source_score = _source_priority(item.get('source') or item.get('feed') or '')
     keyword = _keyword_match_score((item.get('title') or '') + ' ' + (item.get('snippet') or ''))
-    novelty = _novelty_score(item.get('url') or '')
+    novel = _novelty_score(item.get('url') or '')
     recency = _recency_score(item.get('published_at') or '')
     # popularity unknown in many feeds; attempt to use 'points' or 'comments'
     pop = 0.0

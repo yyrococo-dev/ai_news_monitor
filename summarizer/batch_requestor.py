@@ -14,7 +14,15 @@ def item_tokens(item: Dict) -> int:
     return estimate_tokens(title) + estimate_tokens(snippet)
 
 
-def chunk_items_by_tokens(items: List[Dict], target_tokens: int = 3000) -> List[List[Dict]]:
+def chunk_items_by_tokens(items: List[Dict], target_tokens: int = 3000, max_calls: int = None) -> List[List[Dict]]:
+    """Chunk items so that each chunk is approximately target_tokens.
+    If max_calls is provided, adjust target_tokens so total will be split into at most max_calls chunks.
+    """
+    total = sum(item_tokens(it) for it in items)
+    if max_calls and max_calls > 0:
+        # cap target to aim for at most max_calls
+        target_tokens = max(1, int(total / max_calls))
+
     chunks: List[List[Dict]] = []
     cur: List[Dict] = []
     cur_tokens = 0
@@ -33,9 +41,9 @@ def chunk_items_by_tokens(items: List[Dict], target_tokens: int = 3000) -> List[
     return chunks
 
 # Backwards-compatible alias
-def chunk_items(items: List[Dict], max_items: int = 20, use_token: bool = False, target_tokens: int = 3000) -> List[List[Dict]]:
+def chunk_items(items: List[Dict], max_items: int = 20, use_token: bool = False, target_tokens: int = 3000, max_calls: int = None) -> List[List[Dict]]:
     if use_token:
-        return chunk_items_by_tokens(items, target_tokens=target_tokens)
+        return chunk_items_by_tokens(items, target_tokens=target_tokens, max_calls=max_calls)
     # legacy behaviour
     chunks = []
     for i in range(0, len(items), max_items):

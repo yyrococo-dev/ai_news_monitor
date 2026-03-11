@@ -16,6 +16,10 @@ def main():
     args = parser.parse_args()
 
     init_db()
+    # ensure OpenClaw official sources are seeded (idempotent)
+    from storage.schema import seed_sources
+    seed_sources()
+
     feeds = os.environ.get('AI_NEWS_FEEDS','https://hnrss.org/frontpage').split(',')
     rc = RSSCollector(feeds=feeds)
     items = rc.fetch()

@@ -23,6 +23,15 @@ def main():
     feeds = os.environ.get('AI_NEWS_FEEDS','https://hnrss.org/frontpage').split(',')
     rc = RSSCollector(feeds=feeds)
     items = rc.fetch()
+    # also fetch web sources (docs/blog/github pages)
+    try:
+        from collectors.web_collector import WebCollector
+        wc = WebCollector()
+        web_items = wc.fetch()
+        print('web fetched', len(web_items), 'items')
+        items.extend(web_items)
+    except Exception:
+        print('web collector load failed')
     print('fetched', len(items), 'items')
 
     # normalize urls

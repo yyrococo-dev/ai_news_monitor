@@ -51,10 +51,15 @@ def main():
         print('DRY RUN SUMMARY:\n')
         print(final_summary[:2000])
     else:
-        # TODO: send via Telegram deliverer
+        # send via Telegram deliverer if creds present
         from deliver.telegram_deliver import TelegramDeliver
         td = TelegramDeliver()
-        td.deliver(final_summary[:8000], items=normalized)
+        if not td.token:
+            print('No TELEGRAM_BOT_TOKEN found in environment; skipping send')
+            return
+        # sanitize HTML in summaries
+        results = td.deliver(final_summary, items=normalized, html=True, dry_run=False)
+        print('Delivered, results count:', len(results))
 
 if __name__ == '__main__':
     main()

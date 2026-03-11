@@ -38,7 +38,10 @@ def main():
 
     # batching - prefer token-based batching
     use_token = True
-    chunks = batch_requestor.chunk_items(normalized, use_token=use_token, target_tokens=3000)
+    # adjust max_calls based on environment/config (default: 5 calls per run)
+    max_calls = int(os.environ.get('AI_SUMMARY_MAX_CALLS', '5'))
+    target_tokens = int(os.environ.get('AI_SUMMARY_TARGET_TOKENS', '3000'))
+    chunks = batch_requestor.chunk_items(normalized, use_token=use_token, target_tokens=target_tokens, max_calls=max_calls)
     summaries = []
     for i, chunk in enumerate(chunks):
         print(f'Processing chunk {i+1}/{len(chunks)} with {len(chunk)} items')

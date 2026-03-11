@@ -1,7 +1,7 @@
 import os
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
-from ..utils.html_utils import html_to_text
+from utils.html_utils import html_to_text
 
 class TelegramDeliver:
     def __init__(self, token=None, chat_id=None, max_chunk=3500):

@@ -6,3 +6,4 @@ storage.db
 .env
 .env.local
 .DS_Store
+.env

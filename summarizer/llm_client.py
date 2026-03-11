@@ -64,19 +64,39 @@ def _call_gemini_api(items: List[Dict], prompt_name: str) -> str:
     try:
         import google.genai as genai
         try:
+            # preferred: instantiate client and call generate_text
             client = genai.Client()
         except Exception:
             client = None
         if client is not None:
             try:
-                # preferred modern call: client.generate_text
-                resp = client.generate_text(model='models/text-bison-001', input=prompt)
-                # resp may have .text or .content
-                if hasattr(resp, 'text'):
-                    return resp.text
-                if isinstance(resp, dict):
-                    return resp.get('candidates', [{}])[0].get('content','')
-                return str(resp)
+                # Try known variants for generate API
+                for call_name in ('generate_text', 'generate', 'text.generate', 'generateText'):
+                    try:
+                        # nested attribute paths
+                        parts = call_name.split('.')
+                        fn = client
+                        for p in parts:
+                            fn = getattr(fn, p, None)
+                            if fn is None:
+                                break
+                        if callable(fn):
+                            resp = fn(model='models/text-bison-001', input=prompt)
+                            if hasattr(resp, 'text'):
+                                return resp.text
+                            if isinstance(resp, dict):
+                                return resp.get('candidates', [{}])[0].get('content','')
+                            return str(resp)
+                    except Exception as e:
+                        logger.info('genai client call variant %s failed: %s', call_name, e)
+                # try top-level helper
+                if hasattr(genai, 'generate_text'):
+                    resp = genai.generate_text(model='models/text-bison-001', input=prompt)
+                    if hasattr(resp, 'text'):
+                        return resp.text
+                    if isinstance(resp, dict):
+                        return resp.get('candidates', [{}])[0].get('content','')
+                    return str(resp)
             except Exception as e:
                 logger.exception('google.genai generate_text failed: %s', e)
                 # fall through to legacy client
@@ -93,11 +113,15 @@ def _call_gemini_api(items: List[Dict], prompt_name: str) -> str:
         except Exception:
             pass
         # try predict, generate, or text endpoint variations
-        for fn in ('generate', 'predict', 'text', 'generate_text'):
+        for fn in ('predict', 'generate', 'generate_text', 'text', 'chat'):
             try:
                 func = getattr(legacy, fn, None)
                 if func:
-                    resp = func(model='gpt-4o-mini', input=prompt)
+                    try:
+                        resp = func(model='gpt-4o-mini', input=prompt)
+                    except TypeError:
+                        # some variants expect different kwargs
+                        resp = func(model='gpt-4o-mini', prompt=prompt)
                     if hasattr(resp, 'text'):
                         return resp.text
                     if isinstance(resp, dict):

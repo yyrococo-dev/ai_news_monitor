@@ -1,12 +1,13 @@
 import os
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
+from ..utils.html_utils import html_to_text
 
 class TelegramDeliver:
     def __init__(self, token=None, chat_id=None, max_chunk=3500):
         self.token = token or os.environ.get('TELEGRAM_BOT_TOKEN')
         self.chat_id = chat_id or os.environ.get('TELEGRAM_ADMIN_ID')
-        self.api = f'https://api.telegram.org/bot{self.token}/sendMessage'
+        self.api = f'https://api.telegram.org/bot{self.token}/sendMessage' if self.token else None
         self.max_chunk = max_chunk
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
@@ -54,8 +55,13 @@ class TelegramDeliver:
             parts.append(cur)
         return parts
 
-    def deliver(self, summary_text, items=None):
-        chunks = self._split_text(summary_text)
+    def deliver(self, summary_text, items=None, html=False, dry_run=False):
+        # Convert HTML to plain text if requested
+        text = html_to_text(summary_text) if html else summary_text
+        # If dry run, return chunks without sending
+        chunks = self._split_text(text)
+        if dry_run:
+            return [{'mock': True, 'text': c[:200]} for c in chunks]
         results = []
         for c in chunks:
             results.append(self._send(c))

@@ -40,26 +40,31 @@ def main():
         print('no items to summarize')
         return
 
-    # batching - prefer token-based batching
-    use_token = True
-    # adjust max_calls based on environment/config (default: 5 calls per run)
-    max_calls = int(os.environ.get('AI_SUMMARY_MAX_CALLS', '5'))
-    target_tokens = int(os.environ.get('AI_SUMMARY_TARGET_TOKENS', '3000'))
-    chunks = batch_requestor.chunk_items(normalized, use_token=use_token, target_tokens=target_tokens, max_calls=max_calls)
-    summaries = []
-    from core.notifier import notify_run
-    for i, chunk in enumerate(chunks):
-        print(f'Processing chunk {i+1}/{len(chunks)} with {len(chunk)} items')
-        run_name = f'chunk-{i+1}-of-{len(chunks)}'
-        with notify_run(name=run_name):
-            s = llm_client.summarize_batch(chunk, prompt_name='summarize.daily')
-        summaries.append(s)
+    # Rank and choose top-K important items for full LLM summarization
+    from summarizer.ranker import rank_items
+    TOP_K = int(os.environ.get('AI_SUMMARY_TOP_K','5'))
 
-    final_summary = '\n\n---\n\n'.join(summaries)
+    ranked = rank_items(normalized, top_k=TOP_K)
+    print('Selected top items:')
+    for it, sc in ranked:
+        print(' -', (it.get('title') or '')[:120], 'score=', sc)
+
+    # Summarize top-K with llm_client (fallback will be used if no key)
+    top_items = [it for it, sc in ranked]
+    from core.notifier import notify_run
+    with notify_run(name='summarize-top-k'):
+        summary_text = llm_client.summarize_batch(top_items, prompt_name='summarize.daily')
+
+    # For rest, produce a short headlines list
+    others = [it for it in normalized if it not in top_items]
+    headlines = '\n'.join(['- ' + (it.get('title') or '') + ' (' + (it.get('url') or '') + ')' for it in others[:20]])
+
+    # combine
+    final_summary = summary_text + '\n\n---\n\n' + 'Other headlines:\n' + headlines
 
     if args.dry_run:
         print('DRY RUN SUMMARY:\n')
-        print(final_summary[:2000])
+        print(final_summary[:3000])
     else:
         # send via Telegram deliverer if creds present
         from deliver.telegram_deliver import TelegramDeliver

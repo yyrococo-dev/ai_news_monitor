@@ -12,6 +12,7 @@
 - [x] 1.7 runner.py: 오케스트레이션(한 번 실행 후 종료형) + 로컬 실행 가이드
 - [x] 1.8 deliver: deliver/telegram_deliver.py (message truncation/pagination)
 - [ ] 1.9 통합 테스트: 수집 → 요약(fallback) → 전송 시나리오 실행
+- [ ] 1.10 sources: OpenClaw 공식 도메인/레포(예: docs.openclaw.ai, github.com/openclaw/openclaw) 기본 소스 목록에 추가 및 config/.env.example 반영
 
 ## Sprint 2 - 확장 (2주차)
 - [ ] 2.1 prompts/: 외부 프롬프트 파일 구조(.yaml/.txt)

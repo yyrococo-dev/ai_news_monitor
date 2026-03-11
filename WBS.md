@@ -17,9 +17,9 @@
 - [x] 1.12 config: .env.example created with TELEGRAM/GEMINI/GITHUB placeholders
 
 ## Sprint 2 - 확장 (2주차)
-- [ ] 2.1 prompts/: 외부 프롬프트 파일 구조(.yaml/.txt)
-- [ ] 2.2 summarizer: llm_client.py (Gemini wrapper stub) + batch_requestor.py
-- [ ] 2.3 fallback summarizer: local_fallback_summarizer.py (본문 앞 3문장 추출)
+- [x] 2.1 prompts/: 외부 프롬프트 파일 구조(.yaml/.txt)
+- [x] 2.2 summarizer: llm_client.py (Gemini wrapper stub) + batch_requestor.py
+- [x] 2.3 fallback summarizer: local_fallback_summarizer.py (본문 앞 3문장 추출)
 - [ ] 2.4 scheduler: launchd / cron 예제 및 runner cron 등록 스크립트
 - [ ] 2.5 docs: README 상세(설치/운영/온보딩)
 

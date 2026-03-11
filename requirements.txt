@@ -1,0 +1,5 @@
+feedparser
+PyGithub
+requests
+python-dotenv
+tenacity

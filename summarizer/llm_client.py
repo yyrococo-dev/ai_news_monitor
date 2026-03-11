@@ -42,33 +42,71 @@ def _create_jira_issue(title: str, body: str):
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
 def _call_gemini_api(items: List[Dict], prompt_name: str) -> str:
     """Call Google Gemini/Generative AI if client is available.
-    Attempts to use `google.generativeai` if installed; otherwise raises.
+    Tries multiple client libraries/entrypoints to be resilient across environments:
+      - google.genai (preferred)
+      - google.generativeai (legacy)
     The prompt requests a Korean summary for the provided items.
     """
     key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_GENERATIVE_AI_API_KEY')
     if not key:
         raise RuntimeError('No GEMINI key')
 
-    # try google.generativeai client
+    # build prompt text
+    prompt_lines = ['다음 기사들을 한국어로 간결하게 요약해 주세요. 각 기사는 번호를 붙여 한 문단(2-3문장)으로 요약하고, 마지막에 출처 링크를 넣어주세요.\n']
+    for i, it in enumerate(items, start=1):
+        title = it.get('title') or ''
+        snippet = it.get('snippet') or ''
+        url = it.get('url') or ''
+        prompt_lines.append(f"{i}. 제목: {title}\n요약 참고: {snippet}\n링크: {url}\n")
+    prompt = '\n'.join(prompt_lines)
+
+    # 1) Try modern google.genai client if available
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=key)
-        # build prompt text
-        prompt_lines = ['다음 기사들을 한국어로 간결하게 요약해 주세요. 각 기사는 번호를 붙여 한 문단(2-3문장)으로 요약하고, 마지막에 출처 링크를 넣어주세요.\n']
-        for i, it in enumerate(items, start=1):
-            title = it.get('title') or ''
-            snippet = it.get('snippet') or ''
-            url = it.get('url') or ''
-            prompt_lines.append(f"{i}. 제목: {title}\n요약 참고: {snippet}\n링크: {url}\n")
-        prompt = '\n'.join(prompt_lines)
-        # call text generation
-        response = genai.predict(model='gpt-4o-mini', input=prompt)
-        # response may have 'content' or 'candidates'
-        if hasattr(response, 'text'):
-            return response.text
-        if isinstance(response, dict):
-            return response.get('candidates', [{}])[0].get('content','')
-        return str(response)
+        import google.genai as genai
+        try:
+            client = genai.Client()
+        except Exception:
+            client = None
+        if client is not None:
+            try:
+                # preferred modern call: client.generate_text
+                resp = client.generate_text(model='models/text-bison-001', input=prompt)
+                # resp may have .text or .content
+                if hasattr(resp, 'text'):
+                    return resp.text
+                if isinstance(resp, dict):
+                    return resp.get('candidates', [{}])[0].get('content','')
+                return str(resp)
+            except Exception as e:
+                logger.exception('google.genai generate_text failed: %s', e)
+                # fall through to legacy client
+        else:
+            logger.info('google.genai imported but client could not be instantiated')
+    except Exception:
+        logger.info('google.genai not available or import failed; trying legacy client')
+
+    # 2) Try legacy google.generativeai
+    try:
+        import google.generativeai as legacy
+        try:
+            legacy.configure(api_key=key)
+        except Exception:
+            pass
+        # try predict, generate, or text endpoint variations
+        for fn in ('generate', 'predict', 'text', 'generate_text'):
+            try:
+                func = getattr(legacy, fn, None)
+                if func:
+                    resp = func(model='gpt-4o-mini', input=prompt)
+                    if hasattr(resp, 'text'):
+                        return resp.text
+                    if isinstance(resp, dict):
+                        return resp.get('candidates', [{}])[0].get('content','')
+                    return str(resp)
+            except Exception as e:
+                logger.info('legacy client method %s failed: %s', fn, e)
+        # if none worked, raise
+        raise RuntimeError('legacy client present but no usable call succeeded')
     except Exception as e:
         logger.exception('Gemini client call failed: %s', e)
         raise

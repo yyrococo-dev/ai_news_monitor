@@ -147,16 +147,6 @@ def main():
         # sanitize HTML in summaries
         results = td.deliver(final_summary, items=normalized, html=False, dry_run=False)
         print('Delivered, results count:', len(results))
-    else:
-        # send via Telegram deliverer if creds present
-        from deliver.telegram_deliver import TelegramDeliver
-        td = TelegramDeliver()
-        if not td.token:
-            print('No TELEGRAM_BOT_TOKEN found in environment; skipping send')
-            return
-        # sanitize HTML in summaries
-        results = td.deliver(final_summary, items=normalized, html=True, dry_run=False)
-        print('Delivered, results count:', len(results))
 
 if __name__ == '__main__':
     main()

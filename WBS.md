@@ -31,6 +31,7 @@
 
 Notes:
 - 각 항목에 대해 작업 시작 시 담당자(Assignee)와 예상 소요시간(예: 2h, 1d)을 주석으로 추가하세요.
+- 작업 시작 시 WBS 항목 또는 Jira 이슈 생성 후 커밋/PR 메시지에 WBS 항목 번호 또는 Jira 키를 포함하세요(예: "WBS-1.4 feat: add rss collector" 또는 "KAN-123: fix ...").
 - 완료 시 체크박스 앞에 날짜와 커밋/PR 링크 또는 Jira 이슈 키를 덧붙입니다.
 
 (파일: dev/ai_news_monitor/WBS.md)

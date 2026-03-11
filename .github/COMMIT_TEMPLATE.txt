@@ -1,0 +1,13 @@
+# Commit message template
+# Format: [WBS-<id>] <type>: short summary
+
+# Example:
+# WBS-1.4 feat: add rss collector
+
+<Short summary>
+
+Detailed description (optional):
+- What changed
+- Why
+- Related WBS/Jira: 
+

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import os
 import time
+import sqlite3
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent / 'tools'))
@@ -35,22 +36,58 @@ except Exception:
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES_DIR = REPO_ROOT / 'dev_skill' / 'examples'
+DB_PATH = REPO_ROOT / 'storage.db'
 
 
-def _post_jira(issue_key: str, text: str):
-    """Post a comment to Jira with retries if jira_post_comment is available."""
+def _get_last_audit_id(related_issue: str, agent_id: str = 'orchestrator') -> int:
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM agent_audit WHERE related_issue=? AND agent_id=? ORDER BY id DESC LIMIT 1", (related_issue, agent_id))
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
+def _post_jira_adf(issue_key: str, stage: str, status: str, summary: str = None, audit_id: int = None, artifacts: list = None):
+    """Post a structured ADF comment to Jira summarizing a pipeline stage.
+
+    artifacts: list of (label, url_or_path)
+    """
     if not jira_post_comment or not issue_key:
         return False
+    body = {
+        'body': [
+            {
+                'type': 'doc',
+                'version': 1,
+                'content': [
+                    {'type': 'paragraph', 'content': [{'type': 'text', 'text': f'(SUJI) 단계: {stage} - 상태: {status}'}]},
+                ]
+            }
+        ]
+    }
+    if summary:
+        body['body'][0]['content'].append({'type': 'paragraph', 'content': [{'type': 'text', 'text': f'요약: {summary}'}]})
+    if audit_id:
+        body['body'][0]['content'].append({'type': 'paragraph', 'content': [{'type': 'text', 'text': f'agent_audit id: {audit_id}'}]})
+    if artifacts:
+        for label, path in artifacts:
+            body['body'][0]['content'].append({'type': 'paragraph', 'content': [{'type': 'text', 'text': f'{label}: {path}'}]})
+
     attempts = 0
+    last_exc = None
     while attempts < 3:
         try:
-            jira_post_comment(issue_key, text)
+            # jira_post_comment expects either simple text or ADF-compatible body depending on helper implementation
+            jira_post_comment(issue_key, body)
             return True
         except Exception as e:
-            attempts += 1
-            time.sleep(1 * attempts)
             last_exc = e
-    # if we get here, all retries failed
+            attempts += 1
+            time.sleep(attempts)
     log_agent_action('orchestrator', 'jira_post_failed', output_hash=str(last_exc))
     return False
 
@@ -63,18 +100,26 @@ def _step(name: str, fn, jira_issue: str = None):
     print(f'[orchestrator] {name} 시작...')
     try:
         fn()
+        # record action
         log_agent_action('orchestrator', f'{name}:success')
-        print(f'[orchestrator] {name} 완료.')
-        # post summary to jira if available
+        audit_id = _get_last_audit_id(None, 'orchestrator')
+        print(f'[orchestrator] {name} 완료. audit_id={audit_id}')
+        # post structured summary to jira if available
         if jira_issue:
-            text = f"(SUJI) {name} 완료. 상태: success."
-            _post_jira(jira_issue, text)
+            summary_text = f'{name} 단계가 성공적으로 완료되었습니다.'
+            artifacts = []
+            # include local log path if exists
+            log_path = Path('/tmp') / 'orch_flow_run2.log'
+            if log_path.exists():
+                artifacts.append(('orchestrator_log', str(log_path)))
+            _post_jira_adf(jira_issue, name, 'success', summary=summary_text, audit_id=audit_id, artifacts=artifacts)
     except Exception as e:
+        # record failure
         log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e))
+        audit_id = _get_last_audit_id(None, 'orchestrator')
         print(f'[orchestrator] {name} 실패: {e}', file=sys.stderr)
         if jira_issue:
-            text = f"(SUJI) {name} 실패. 예외: {e}"
-            _post_jira(jira_issue, text)
+            _post_jira_adf(jira_issue, name, 'failed', summary=str(e), audit_id=audit_id)
         raise
 
 

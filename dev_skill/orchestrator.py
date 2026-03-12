@@ -27,14 +27,21 @@ except Exception:
     pass
 try:
     from jira_helper import jira_post_comment
-from dev_skill.config.templates import detailed_stage_template
+    from dev_skill.config.templates import detailed_stage_template
 except Exception:
-    # fallback: try local tools path
+    # fallback: try local tools path or disable
     try:
         from jira_helper import jira_post_comment
-from dev_skill.config.templates import detailed_stage_template
+        from dev_skill.config.templates import detailed_stage_template
     except Exception:
         jira_post_comment = None
+        def detailed_stage_template(stage, status, summary, audit_id=None, artifacts=None, next_steps=None):
+            parts = [f"(SUJI) 단계: {stage} - 상태: {status}"]
+            if summary:
+                parts.append(f"요약: {summary}")
+            if audit_id:
+                parts.append(f"agent_audit id: {audit_id}")
+            return "\n".join(parts)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES_DIR = REPO_ROOT / 'dev_skill' / 'examples'
@@ -109,16 +116,16 @@ def _step(name: str, fn, jira_issue: str = None):
         # post structured summary to jira if available
         if jira_issue:
             summary_text = f'{name} 단계가 성공적으로 완료되었습니다.'
-            # build detailed ADF-like plain summary using template
-            try:
-                tpl = detailed_stage_template(name, 'success', summary_text, audit_id=audit_id, artifacts=artifacts, next_steps='검토 및 승인 필요시 PR 생성/병합')
-            except Exception:
-                tpl = summary_text
             artifacts = []
             # include local log path if exists
             log_path = Path('/tmp') / 'orch_flow_run2.log'
             if log_path.exists():
                 artifacts.append(('orchestrator_log', str(log_path)))
+            # build detailed ADF-like plain summary using template
+            try:
+                tpl = detailed_stage_template(name, 'success', summary_text, audit_id=audit_id, artifacts=artifacts, next_steps='검토 및 승인 필요시 PR 생성/병합')
+            except Exception:
+                tpl = summary_text
             _post_jira_adf(jira_issue, name, 'success', summary=tpl, audit_id=audit_id, artifacts=artifacts)
     except Exception as e:
         # record failure

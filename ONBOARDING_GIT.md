@@ -83,6 +83,11 @@ Git Onboarding — ai_news_monitor
   - 또는 HTTPS + GitHub PAT 저장 위치 안내 (대체 방법)
 - 외부 영향(실 PR, 배포, 텔레그램 전송 등)은 반드시 Jira에서 '진행해줘' 코멘트 또는 명시적 허가 문구로 승인
 
+추가 정책 (변경됨):
+- 신규 레포 생성 기본 정책: private by default (조직 정책에 따라 권한 부여 별도)
+- Maker/Checker 규칙: 자동화된 ai-dev가 생성한 PR은 ai-dev-review 또는 사람 리뷰어가 승인할 때까지 병합하지 않습니다. 자동 승인 루프를 피하려면 PR 보호 규칙을 활성화하세요.
+- 설계 승인 허들: ai-architect가 생성한 Tech Spec은 반드시 한 명 이상의 인간 테크 리드 승인이 있어야 ai-dev 단계로 진행됩니다.
+
 7) 저장소 권한/토큰(옵션)
 - 안전하게 보관: ~/.openclaw/secrets/github.env 파일 또는 OS 키체인 사용 권장
 - 예시 파일 형식 (~/.openclaw/secrets/github.env):

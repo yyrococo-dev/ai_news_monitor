@@ -68,15 +68,13 @@ def _post_jira_adf(issue_key: str, stage: str, status: str, summary: str = None,
     if not jira_post_comment or not issue_key:
         return False
     body = {
-        'body': [
-            {
-                'type': 'doc',
-                'version': 1,
-                'content': [
-                    {'type': 'paragraph', 'content': [{'type': 'text', 'text': f'(SUJI) 단계: {stage} - 상태: {status}'}]},
-                ]
-            }
-        ]
+        'body': {
+            'type': 'doc',
+            'version': 1,
+            'content': [
+                {'type': 'paragraph', 'content': [{'type': 'text', 'text': f'(SUJI) 단계: {stage} - 상태: {status}'}]},
+            ]
+        }
     }
     if summary:
         body['body'][0]['content'].append({'type': 'paragraph', 'content': [{'type': 'text', 'text': f'요약: {summary}'}]})

@@ -16,7 +16,7 @@ from dev_skill.tools.log_agent_action import log_agent_action
 
 ISSUE_KEY = os.environ.get('JIRA_ISSUE_KEY','KAN-15')
 POLL_INTERVAL = 10
-MARKER = Path(__file__).resolve().parents[2] / 'dev-skill' / 'hooks' / 'approval_marker.txt'
+MARKER = Path(__file__).resolve().parents[2] / 'dev_skill' / 'hooks' / 'approval_marker.txt'
 
 seen_comment_ids = set()
 

@@ -2,7 +2,7 @@
 """
 Orchestrator (dry-run) for AI-agent pipeline:
 - Runs ai-dev example, then ai-integrator, then ai-qa in sequence.
-- Each step logs via log_agent_action and respects dev-skill RULES (dry-run by default).
+- Each step logs via log_agent_action and respects dev_skill RULES (dry-run by default).
 - Intended for local/simulated runs; can be wired into sessions_spawn or cron later.
 """
 import subprocess

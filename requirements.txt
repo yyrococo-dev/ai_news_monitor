@@ -3,3 +3,5 @@ PyGithub
 requests
 python-dotenv
 tenacity
+google-genai
+PyYAML

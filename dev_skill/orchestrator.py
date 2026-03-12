@@ -7,19 +7,23 @@ Orchestrator (dry-run) for AI-agent pipeline:
 """
 import subprocess
 import sys
+import os
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parents[1] / 'tools'))
+sys.path.append(str(Path(__file__).resolve().parent / 'tools'))
 from log_agent_action import log_agent_action
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EXAMPLES_DIR = REPO_ROOT / 'examples'
+EXAMPLES_DIR = REPO_ROOT / 'dev-skill' / 'examples'
 
 
 def run_ai_dev():
     # run the example script logic directly
     print('Running ai-dev example...')
     dev_script = EXAMPLES_DIR / 'ai_dev_example.py'
-    subprocess.check_call([sys.executable, str(dev_script)])
+    env = os.environ.copy()
+    # ensure the compatibility package `dev_skill` (in repo root) is importable
+    env['PYTHONPATH'] = str(REPO_ROOT)
+    subprocess.check_call([sys.executable, str(dev_script)], env=env)
     log_agent_action('orchestrator','ran_ai_dev')
 
 

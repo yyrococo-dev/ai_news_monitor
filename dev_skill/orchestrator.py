@@ -359,5 +359,14 @@ if __name__ == '__main__':
     # Try to read a Jira issue key from env for automatic comments
     jira_issue = os.environ.get('JIRA_ISSUE_KEY')
     for step_name, step_fn in PIPELINE:
+        # check pipeline state for this issue; if HUMAN_INTERVENTION, stop further automated progress
+        if jira_issue:
+            try:
+                ps = _get_pipeline_state(str(REPO_ROOT/'storage.db'), jira_issue)
+                if ps and ps.get('state') == 'HUMAN_INTERVENTION':
+                    print(f'[orchestrator] {jira_issue} in HUMAN_INTERVENTION — automated progress halted. Awaiting manual resolution.')
+                    break
+            except Exception:
+                pass
         _step(step_name, step_fn, jira_issue=jira_issue)
     print('Orchestrator 완료')

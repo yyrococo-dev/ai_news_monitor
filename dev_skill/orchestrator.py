@@ -90,15 +90,34 @@ def _post_jira_adf(issue_key: str, stage: str, status: str, summary: str = None,
     last_exc = None
     while attempts < 3:
         try:
-            # jira_post_comment expects either simple text or ADF-compatible body depending on helper implementation
+            # Try helper first
             jira_post_comment(issue_key, body)
             return True
         except Exception as e:
             last_exc = e
             attempts += 1
             time.sleep(attempts)
-    log_agent_action('orchestrator', 'jira_post_failed', output_hash=str(last_exc))
-    return False
+    # fallback: post directly via Jira REST using jira.env credentials
+    try:
+        from pathlib import Path
+        import requests
+        secrets = Path.home()/'.openclaw'/'secrets'/'jira.env'
+        creds = {}
+        with open(secrets) as f:
+            for line in f:
+                if '=' in line and not line.strip().startswith('#'):
+                    k,v=line.strip().split('=',1); creds[k]=v
+        host = creds.get('JIRA_HOST').replace('https://','').replace('http://','').strip('/')
+        email = creds.get('JIRA_EMAIL')
+        token = creds.get('JIRA_API_TOKEN')
+        url = f'https://{host}/rest/api/3/issue/{issue_key}/comment'
+        headers={'Content-Type':'application/json'}
+        r = requests.post(url, auth=(email,token), json=body, headers=headers, timeout=15)
+        r.raise_for_status()
+        return True
+    except Exception as e:
+        log_agent_action('orchestrator', 'jira_post_failed', output_hash=str(e))
+        return False
 
 
 def _step(name: str, fn, jira_issue: str = None):

@@ -123,6 +123,77 @@ def _post_jira(issue_key: str, text: str, prefer_adf: bool = False):
     return result
 
 
+import sqlite3
+import json
+
+def _ensure_pipeline_table(db_path: str):
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS pipeline_state (
+            issue_key TEXT PRIMARY KEY,
+            state TEXT,
+            failure_count INTEGER DEFAULT 0,
+            last_error TEXT,
+            last_ts TEXT,
+            metadata TEXT
+        )
+        ''')
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def _get_pipeline_state(db_path: str, issue_key: str):
+    _ensure_pipeline_table(db_path)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute('SELECT state,failure_count,last_error,last_ts,metadata FROM pipeline_state WHERE issue_key=?', (issue_key,))
+    row = cur.fetchone()
+    conn.close()
+    if row:
+        state, failure_count, last_error, last_ts, metadata = row
+        meta = json.loads(metadata) if metadata else {}
+        return {'state': state, 'failure_count': failure_count, 'last_error': last_error, 'last_ts': last_ts, 'metadata': meta}
+    else:
+        return None
+
+
+def _set_pipeline_state(db_path: str, issue_key: str, state: str, error: str = None, metadata: dict = None):
+    _ensure_pipeline_table(db_path)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    import datetime
+    ts = datetime.datetime.utcnow().isoformat()
+    meta_json = json.dumps(metadata or {})
+    cur.execute('INSERT INTO pipeline_state (issue_key,state,failure_count,last_error,last_ts,metadata) VALUES (?,?,?,?,?,?) ON CONFLICT(issue_key) DO UPDATE SET state=excluded.state, last_error=excluded.last_error, last_ts=excluded.last_ts, metadata=excluded.metadata', (issue_key, state, 0, error, ts, meta_json))
+    conn.commit()
+    conn.close()
+
+
+def _incr_failure(db_path: str, issue_key: str, last_error: str = None):
+    _ensure_pipeline_table(db_path)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute('SELECT failure_count FROM pipeline_state WHERE issue_key=?', (issue_key,))
+    row = cur.fetchone()
+    if row:
+        fc = row[0] + 1
+        import datetime
+        ts = datetime.datetime.utcnow().isoformat()
+        cur.execute('UPDATE pipeline_state SET failure_count=?, last_error=?, last_ts=? WHERE issue_key=?', (fc, last_error, ts, issue_key))
+    else:
+        import datetime
+        ts = datetime.datetime.utcnow().isoformat()
+        cur.execute('INSERT INTO pipeline_state (issue_key,state,failure_count,last_error,last_ts,metadata) VALUES (?,?,?,?,?,?)', (issue_key, 'DEVELOPMENT', 1, last_error, ts, json.dumps({})))
+        fc = 1
+    conn.commit()
+    conn.close()
+    return fc
+
+
 def _build_plain_comment(stage: str, status: str, summary: str = None, audit_id: int = None, artifacts: list = None):
     lines = [f"(SUJI) 단계: {stage} — 상태: {status}"]
     if summary:

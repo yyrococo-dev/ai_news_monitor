@@ -9,7 +9,8 @@ export PYTHONPATH
 echo "Running integration smoke tests (simulated)"
 # 실제 환경에서는 pytest나 통합 테스트 스위트를 호출
 sleep 1
-TEST_RESULT=0
+# For simulation: set TEST_RESULT=1 to force failure
+TEST_RESULT=1
 
 if [ $TEST_RESULT -eq 0 ]; then
   echo "Integration smoke tests passed"
@@ -20,4 +21,5 @@ print('Logged integrator action')
 PY
 else
   echo "Integration tests failed"
+  exit 1
 fi

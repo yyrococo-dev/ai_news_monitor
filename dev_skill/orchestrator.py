@@ -110,8 +110,7 @@ def _step(name: str, fn, jira_issue: str = None):
     try:
         fn()
         # record action
-        log_agent_action('orchestrator', f'{name}:success')
-        audit_id = _get_last_audit_id(None, 'orchestrator')
+        audit_id = log_agent_action('orchestrator', f'{name}:success', related_issue=jira_issue)
         print(f'[orchestrator] {name} 완료. audit_id={audit_id}')
         # post structured summary to jira if available
         if jira_issue:
@@ -129,8 +128,7 @@ def _step(name: str, fn, jira_issue: str = None):
             _post_jira_adf(jira_issue, name, 'success', summary=tpl, audit_id=audit_id, artifacts=artifacts)
     except Exception as e:
         # record failure
-        log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e))
-        audit_id = _get_last_audit_id(None, 'orchestrator')
+        audit_id = log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e), related_issue=jira_issue)
         print(f'[orchestrator] {name} 실패: {e}', file=sys.stderr)
         if jira_issue:
             _post_jira_adf(jira_issue, name, 'failed', summary=str(e), audit_id=audit_id)

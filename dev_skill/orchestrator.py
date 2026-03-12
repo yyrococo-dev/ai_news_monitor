@@ -145,8 +145,8 @@ def _step(name: str, fn, jira_issue: str = None):
     print(f'[orchestrator] {name} 시작...')
     try:
         fn()
-        # record action and get audit id
-        audit_id = log_agent_action('orchestrator', f'{name}:success', related_issue=jira_issue)
+        # record action and get audit id (use canonical storage.db path)
+        audit_id = log_agent_action('orchestrator', f'{name}:success', related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
         print(f'[orchestrator] {name} 완료. audit_id={audit_id}')
         # post summary to jira if available
         if jira_issue:
@@ -159,7 +159,7 @@ def _step(name: str, fn, jira_issue: str = None):
             text = _build_plain_comment(name, 'success', summary=summary, audit_id=audit_id, artifacts=artifacts)
             _post_jira(jira_issue, text)
     except Exception as e:
-        audit_id = log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e), related_issue=jira_issue)
+        audit_id = log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e), related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
         print(f'[orchestrator] {name} 실패: {e}', file=sys.stderr)
         if jira_issue:
             text = _build_plain_comment(name, 'failed', summary=str(e), audit_id=audit_id)

@@ -1,0 +1,7 @@
+{
+  "agent_id": "ai-dev",
+  "action": "create_pr",
+  "issue": "KAN-7",
+  "branch": "feature/ai-dev-sample",
+  "summary": "샘플 변경 (ai-dev)"
+}

@@ -108,7 +108,8 @@ def _post_jira(issue_key: str, text: str, prefer_adf: bool = False):
                     cid = r.json().get('id')
                 except Exception:
                     cid = None
-                log_agent_action('orchestrator', 'jira_post', output_hash=form, related_issue=issue_key)
+                # record the post action and return comment id
+                log_agent_action('orchestrator', 'jira_post', output_hash=form, related_issue=issue_key, db_path=str(REPO_ROOT/'storage.db'))
                 result.update({'ok': True, 'method': 'rest', 'form': form, 'comment_id': cid, 'status_code': r.status_code})
                 return result
             else:
@@ -157,13 +158,29 @@ def _step(name: str, fn, jira_issue: str = None):
             if log_path.exists():
                 artifacts.append(('orchestrator_log', str(log_path)))
             text = _build_plain_comment(name, 'success', summary=summary, audit_id=audit_id, artifacts=artifacts)
-            _post_jira(jira_issue, text)
+            res = _post_jira(jira_issue, text)
+            try:
+                cid = None
+                if isinstance(res, dict):
+                    cid = res.get('comment_id')
+                if cid:
+                    log_agent_action('orchestrator', 'jira_comment_posted', output_hash=str(cid), related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
+            except Exception:
+                pass
     except Exception as e:
         audit_id = log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e), related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
         print(f'[orchestrator] {name} 실패: {e}', file=sys.stderr)
         if jira_issue:
             text = _build_plain_comment(name, 'failed', summary=str(e), audit_id=audit_id)
-            _post_jira(jira_issue, text)
+            res = _post_jira(jira_issue, text)
+            try:
+                cid = None
+                if isinstance(res, dict):
+                    cid = res.get('comment_id')
+                if cid:
+                    log_agent_action('orchestrator', 'jira_comment_posted', output_hash=str(cid), related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
+            except Exception:
+                pass
         raise
 
 

@@ -2,7 +2,7 @@
 # ai-integrator 예제 스크립트 (간단한 통합 체크 수행)
 # 동작: 테스트 실행(예: pytest -q) 후 결과를 감사 로그에 남김
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PYTHONPATH="$REPO_ROOT"
 export PYTHONPATH
 

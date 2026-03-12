@@ -27,10 +27,12 @@ except Exception:
     pass
 try:
     from jira_helper import jira_post_comment
+from dev_skill.config.templates import detailed_stage_template
 except Exception:
     # fallback: try local tools path
     try:
         from jira_helper import jira_post_comment
+from dev_skill.config.templates import detailed_stage_template
     except Exception:
         jira_post_comment = None
 
@@ -107,12 +109,17 @@ def _step(name: str, fn, jira_issue: str = None):
         # post structured summary to jira if available
         if jira_issue:
             summary_text = f'{name} 단계가 성공적으로 완료되었습니다.'
+            # build detailed ADF-like plain summary using template
+            try:
+                tpl = detailed_stage_template(name, 'success', summary_text, audit_id=audit_id, artifacts=artifacts, next_steps='검토 및 승인 필요시 PR 생성/병합')
+            except Exception:
+                tpl = summary_text
             artifacts = []
             # include local log path if exists
             log_path = Path('/tmp') / 'orch_flow_run2.log'
             if log_path.exists():
                 artifacts.append(('orchestrator_log', str(log_path)))
-            _post_jira_adf(jira_issue, name, 'success', summary=summary_text, audit_id=audit_id, artifacts=artifacts)
+            _post_jira_adf(jira_issue, name, 'success', summary=tpl, audit_id=audit_id, artifacts=artifacts)
     except Exception as e:
         # record failure
         log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e))

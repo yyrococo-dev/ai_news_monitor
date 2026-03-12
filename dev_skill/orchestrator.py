@@ -122,6 +122,21 @@ def _post_jira(issue_key: str, text: str, prefer_adf: bool = False):
     return result
 
 
+def _build_plain_comment(stage: str, status: str, summary: str = None, audit_id: int = None, artifacts: list = None):
+    lines = [f"(SUJI) 단계: {stage} — 상태: {status}"]
+    if summary:
+        lines.append(f"요약: {summary}")
+    if audit_id:
+        lines.append(f"agent_audit id: {audit_id}")
+    if artifacts:
+        lines.append("주요 아티팩트:")
+        for label, path in artifacts:
+            lines.append(f"- {label}: {path}")
+    from datetime import datetime
+    lines.append(f"보고시간: {datetime.utcnow().isoformat()}Z")
+    return "\n".join(lines)
+
+
 def _step(name: str, fn, jira_issue: str = None):
     """파이프라인 단계를 실행하고 성공/실패를 로그에 남깁니다.
 
@@ -130,17 +145,24 @@ def _step(name: str, fn, jira_issue: str = None):
     print(f'[orchestrator] {name} 시작...')
     try:
         fn()
-        log_agent_action('orchestrator', f'{name}:success')
-        print(f'[orchestrator] {name} 완료.')
+        # record action and get audit id
+        audit_id = log_agent_action('orchestrator', f'{name}:success', related_issue=jira_issue)
+        print(f'[orchestrator] {name} 완료. audit_id={audit_id}')
         # post summary to jira if available
         if jira_issue:
-            text = f"(SUJI) {name} 완료. 상태: success."
+            summary = f"{name} 단계가 성공적으로 완료되었습니다."
+            artifacts = []
+            # include orchestrator run log if present
+            log_path = Path('/tmp') / 'orch_kan22_run_fix.log'
+            if log_path.exists():
+                artifacts.append(('orchestrator_log', str(log_path)))
+            text = _build_plain_comment(name, 'success', summary=summary, audit_id=audit_id, artifacts=artifacts)
             _post_jira(jira_issue, text)
     except Exception as e:
-        log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e))
+        audit_id = log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e), related_issue=jira_issue)
         print(f'[orchestrator] {name} 실패: {e}', file=sys.stderr)
         if jira_issue:
-            text = f"(SUJI) {name} 실패. 예외: {e}"
+            text = _build_plain_comment(name, 'failed', summary=str(e), audit_id=audit_id)
             _post_jira(jira_issue, text)
         raise
 

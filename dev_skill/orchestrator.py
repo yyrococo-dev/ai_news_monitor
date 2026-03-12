@@ -37,22 +37,89 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES_DIR = REPO_ROOT / 'dev_skill' / 'examples'
 
 
-def _post_jira(issue_key: str, text: str):
-    """Post a comment to Jira with retries if jira_post_comment is available."""
-    if not jira_post_comment or not issue_key:
-        return False
-    attempts = 0
-    while attempts < 3:
+def _post_jira(issue_key: str, text: str, prefer_adf: bool = False):
+    """Post a Jira comment. Default is plain-text; ADF is optional (prefer_adf=True).
+
+    Attempt order:
+      - jira_helper (text or adf)
+      - REST (text or adf)
+
+    Records success/failure into agent_audit with action 'jira_post'. Returns dict with result details.
+    """
+    if not issue_key:
+        return {'ok': False, 'error': 'no_issue_key'}
+
+    attempts = []
+    result = {'ok': False, 'attempts': []}
+
+    def record_attempt(method, form, ok, info):
+        result['attempts'].append({'method': method, 'form': form, 'ok': ok, 'info': str(info)})
+
+    # helper wrapper
+    if jira_post_comment:
+        # try preferred form first
+        forms = ['adf', 'text'] if prefer_adf else ['text', 'adf']
+        for form in forms:
+            try:
+                if form == 'text':
+                    jira_post_comment(issue_key, text)
+                else:
+                    # build simple ADF wrapper
+                    adf = {'body': {'type': 'doc', 'version': 1, 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': text}] }]}}
+                    jira_post_comment(issue_key, adf)
+                record_attempt('helper', form, True, 'posted')
+                log_agent_action('orchestrator', 'jira_post', output_hash=form, related_issue=issue_key)
+                result.update({'ok': True, 'method': 'helper', 'form': form})
+                return result
+            except Exception as e:
+                record_attempt('helper', form, False, repr(e))
+                time.sleep(1)
+    # REST fallback
+    try:
+        from pathlib import Path
+        import requests
+        secrets = Path.home()/'.openclaw'/'secrets'/'jira.env'
+        creds = {}
+        with open(secrets) as f:
+            for line in f:
+                if '=' in line and not line.strip().startswith('#'):
+                    k,v=line.strip().split('=',1); creds[k]=v
+        host = creds.get('JIRA_HOST').replace('https://','').replace('http://','').strip('/')
+        email = creds.get('JIRA_EMAIL')
+        token = creds.get('JIRA_API_TOKEN')
+    except Exception as e:
+        record_attempt('rest', 'init', False, repr(e))
+        log_agent_action('orchestrator', 'jira_post_failed', output_hash=str(e), related_issue=issue_key)
+        return result
+
+    forms = ['adf', 'text'] if prefer_adf else ['text', 'adf']
+    for form in forms:
         try:
-            jira_post_comment(issue_key, text)
-            return True
+            url = f'https://{host}/rest/api/3/issue/{issue_key}/comment'
+            headers = {'Content-Type': 'application/json'}
+            if form == 'text':
+                payload = {'body': text}
+            else:
+                payload = {'body': {'type': 'doc', 'version': 1, 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': text}] }]}}
+            r = requests.post(url, auth=(email, token), json=payload, headers=headers, timeout=15)
+            if r.ok:
+                record_attempt('rest', form, True, f'status:{r.status_code}')
+                try:
+                    cid = r.json().get('id')
+                except Exception:
+                    cid = None
+                log_agent_action('orchestrator', 'jira_post', output_hash=form, related_issue=issue_key)
+                result.update({'ok': True, 'method': 'rest', 'form': form, 'comment_id': cid, 'status_code': r.status_code})
+                return result
+            else:
+                record_attempt('rest', form, False, f'status:{r.status_code} body:{r.text[:200]}')
         except Exception as e:
-            attempts += 1
-            time.sleep(1 * attempts)
-            last_exc = e
-    # if we get here, all retries failed
-    log_agent_action('orchestrator', 'jira_post_failed', output_hash=str(last_exc))
-    return False
+            record_attempt('rest', form, False, repr(e))
+            time.sleep(1)
+
+    # all attempts failed
+    log_agent_action('orchestrator', 'jira_post_failed', output_hash=str(result), related_issue=issue_key)
+    return result
 
 
 def _step(name: str, fn, jira_issue: str = None):

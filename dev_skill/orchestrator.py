@@ -262,9 +262,11 @@ def _step(name: str, fn, jira_issue: str = None):
                 _set_pipeline_state(str(REPO_ROOT/'storage.db'), jira_issue, 'HUMAN_INTERVENTION', error=str(e), metadata={'failed_step': name, 'failure_count': fc})
             except Exception:
                 pass
-            # notify via jira comment
+            # notify via jira comment (include resume guidance)
             if jira_issue:
                 notify_text = _build_plain_comment(name, 'human_intervention', summary=f'최대 재시도({max_retries}) 초과 — 인간 개입 필요: {e}', audit_id=audit_id)
+                # append explicit resume instruction in Korean
+                notify_text = notify_text + "\n\n안내: 이 이슈에 '재실행해줘' 라는 코멘트를 남기면 Orchestrator가 HUMAN_INTERVENTION을 해제하고 파이프라인을 재시작합니다. (영어: 'resume')"
                 _post_jira(jira_issue, notify_text)
                 log_agent_action('orchestrator', 'human_intervention_notified', output_hash=str(fc), related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
         else:

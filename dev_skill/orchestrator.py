@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parent / 'tools'))
 from log_agent_action import log_agent_action
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EXAMPLES_DIR = REPO_ROOT / 'dev-skill' / 'examples'
+EXAMPLES_DIR = REPO_ROOT / 'dev_skill' / 'examples'
 
 
 def run_ai_dev():

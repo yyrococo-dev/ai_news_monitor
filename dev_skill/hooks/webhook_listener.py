@@ -84,6 +84,28 @@ def webhook():
             pass
         return jsonify({'status':'approved'}), 200
 
+    # design approval/rejection handling
+    if 'approve-spec' in text:
+        if not issue_key:
+            return jsonify({'error':'no_issue_key'}), 400
+        ok = _set_pipeline_state(STORAGE_DB, issue_key, 'DESIGN_APPROVED', metadata={'approved_by': author})
+        try:
+            from dev_skill.tools.log_agent_action import log_agent_action
+            log_agent_action('webhook-listener','spec_approved',output_hash=author,related_issue=issue_key, db_path=STORAGE_DB)
+        except Exception:
+            pass
+        return jsonify({'status':'spec_approved'}), 200
+    if 'reject-spec' in text or 'revise-spec' in text:
+        if not issue_key:
+            return jsonify({'error':'no_issue_key'}), 400
+        ok = _set_pipeline_state(STORAGE_DB, issue_key, 'DESIGN_REVIEW', metadata={'rejected_by': author})
+        try:
+            from dev_skill.tools.log_agent_action import log_agent_action
+            log_agent_action('webhook-listener','spec_rejected',output_hash=author,related_issue=issue_key, db_path=STORAGE_DB)
+        except Exception:
+            pass
+        return jsonify({'status':'spec_rejected'}), 200
+
     # resume command: clear HUMAN_INTERVENTION and restart orchestrator for that issue
     if '재실행해줘' in text or 'resume' in text:
         if not issue_key:

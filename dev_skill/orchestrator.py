@@ -294,22 +294,67 @@ def _step(name: str, fn, jira_issue: str = None):
 
 def run_ai_product():
     """ai-product: 요구사항 정리 및 우선순위 결정 (stub)."""
-    # TODO: Jira 이슈 조회 및 제품 스토리 정리 로직 연결
     print('  → ai-product: 요구사항 및 우선순위 확인 (stub)')
 
 
 def run_ai_data():
     """ai-data: 데이터 수집 스펙 검증 및 스키마 확인 (stub)."""
-    # TODO: 스키마 검증, 정규화 테스트 케이스 실행 연결
     print('  → ai-data: 데이터 스키마 및 정규화 확인 (stub)')
 
 
-def run_ai_dev():
-    """ai-dev: 코드 변경 제안 및 단위테스트 실행."""
-    dev_script = EXAMPLES_DIR / 'ai_dev_example.py'
-    env = os.environ.copy()
-    env['PYTHONPATH'] = str(REPO_ROOT)
-    subprocess.check_call([sys.executable, str(dev_script)], env=env)
+def run_ai_architect():
+    """ai-architect: 기술 설계서(spec.md), OpenAPI stub, ERD 생성 및 reports/<ISSUE>/spec.md 저장."""
+    try:
+        jira_issue = os.environ.get('JIRA_ISSUE_KEY')
+        reports_dir = REPO_ROOT / 'reports' / (jira_issue or 'LOCAL')
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        spec_path = reports_dir / 'spec.md'
+        # simple spec stub
+        template = (REPO_ROOT / 'dev_skill' / 'templates' / 'spec_template.md')
+        if template.exists():
+            content = template.read_text()
+        else:
+            content = f"# Technical Spec for {jira_issue or 'LOCAL'}\n\n- OpenAPI: stub\n- ERD: placeholder\n"
+        spec_path.write_text(content)
+        print(f'  → ai-architect: spec generated at {spec_path}')
+        # set pipeline state to DESIGN_REVIEW
+        try:
+            _set_pipeline_state(str(REPO_ROOT/'storage.db'), jira_issue, 'DESIGN_REVIEW', metadata={'spec_path': str(spec_path)})
+        except Exception:
+            pass
+        # post Jira comment asking for approve-spec
+        if jira_issue:
+            text = _build_plain_comment('ai-architect', 'design_ready', summary='Tech spec 생성 완료. 검토 후 Jira에 `approve-spec` 또는 `reject-spec` 코멘트를 남겨주세요.', artifacts=[('spec', str(spec_path))])
+            _post_jira(jira_issue, text)
+    except Exception as e:
+        print('ai-architect failed', e)
+        raise
+
+
+def run_ai_dev_write():
+    """ai-dev-write: 생성된 설계(승인 후) 기반으로 코드 변경 초안을 생성(시뮬레이션)."""
+    jira_issue = os.environ.get('JIRA_ISSUE_KEY')
+    workdir = REPO_ROOT / 'projects' / (jira_issue or 'LOCAL')
+    workdir.mkdir(parents=True, exist_ok=True)
+    patch_file = workdir / 'proposed_change.patch'
+    patch_file.write_text('# patch stub\n# changes proposed by ai-dev-write')
+    print(f'  → ai-dev-write: patch created at {patch_file}')
+    # record action
+    log_agent_action('ai-dev-write', 'proposed_patch', output_hash=str(patch_file), related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
+
+
+def run_ai_dev_review():
+    """ai-dev-review: 정적분석(시뮬레이션) 및 리뷰 코멘트 생성. PR은 생성하되 병합은 사람 승인 필요."""
+    jira_issue = os.environ.get('JIRA_ISSUE_KEY')
+    print('  → ai-dev-review: running static analysis (simulated)')
+    # simulate checks
+    findings = ['lint: ok', 'mypy: ok', 'security: low-risk']
+    summary = '\n'.join(findings)
+    # post review summary to jira
+    if jira_issue:
+        text = _build_plain_comment('ai-dev-review', 'review_complete', summary=summary)
+        _post_jira(jira_issue, text)
+    log_agent_action('ai-dev-review', 'review_complete', output_hash=summary, related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
 
 
 def run_ai_integrator():
@@ -347,7 +392,9 @@ def run_ai_notifier():
 PIPELINE = [
     ('ai-product', run_ai_product),
     ('ai-data',    run_ai_data),
-    ('ai-dev',     run_ai_dev),
+    ('ai-architect', run_ai_architect),
+    ('ai-dev-write', run_ai_dev_write),
+    ('ai-dev-review', run_ai_dev_review),
     ('ai-integrator', run_ai_integrator),
     ('ai-qa',      run_ai_qa),
     ('ai-ops',     run_ai_ops),

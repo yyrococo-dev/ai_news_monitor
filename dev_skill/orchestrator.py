@@ -37,7 +37,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES_DIR = REPO_ROOT / 'dev_skill' / 'examples'
 
 
-def _post_jira(issue_key: str, text: str, prefer_adf: bool = False):
+def _post_jira(issue_key: str, text: str, prefer_adf: bool = True):
     """Post a Jira comment. Default is plain-text; ADF is optional (prefer_adf=True).
 
     Attempt order:
@@ -64,8 +64,13 @@ def _post_jira(issue_key: str, text: str, prefer_adf: bool = False):
                 if form == 'text':
                     jira_post_comment(issue_key, text)
                 else:
-                    # build simple ADF wrapper
-                    adf = {'body': {'type': 'doc', 'version': 1, 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': text}] }]}}
+                    # build ADF wrapper using adf_builder if available
+                    try:
+                        from dev_skill.tools.adf_builder import build_doc
+                        adf_doc = build_doc([text])
+                        adf = {'body': adf_doc}
+                    except Exception:
+                        adf = {'body': {'type': 'doc', 'version': 1, 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': text}] }]}}
                     jira_post_comment(issue_key, adf)
                 record_attempt('helper', form, True, 'posted')
                 log_agent_action('orchestrator', 'jira_post', output_hash=form, related_issue=issue_key)
@@ -100,7 +105,12 @@ def _post_jira(issue_key: str, text: str, prefer_adf: bool = False):
             if form == 'text':
                 payload = {'body': text}
             else:
-                payload = {'body': {'type': 'doc', 'version': 1, 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': text}] }]}}
+                try:
+                    from dev_skill.tools.adf_builder import build_doc
+                    adf_doc = build_doc([text])
+                    payload = {'body': adf_doc}
+                except Exception:
+                    payload = {'body': {'type': 'doc', 'version': 1, 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': text}] }]}}
             r = requests.post(url, auth=(email, token), json=payload, headers=headers, timeout=15)
             if r.ok:
                 record_attempt('rest', form, True, f'status:{r.status_code}')

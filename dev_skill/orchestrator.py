@@ -252,21 +252,47 @@ def _step(name: str, fn, jira_issue: str = None):
             fc = None
         audit_id = log_agent_action('orchestrator', f'{name}:failed', output_hash=str(e), related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
         print(f'[orchestrator] {name} 실패: {e}', file=sys.stderr)
-        # if exceeded retries, set HUMAN_INTERVENTION and notify
+        # classify failure and decide transition
+        try:
+            from dev_skill.tools.classify_failure import classify_failure
+            clf = classify_failure(str(e))
+        except Exception:
+            clf = {'label':'other','score':0.0,'reason':'classifier_error'}
         try:
             max_retries = int(os.environ.get('ORCH_MAX_RETRIES', '3'))
         except Exception:
             max_retries = 3
+        # If exceeded retries, set HUMAN_INTERVENTION (with classifier context) and notify
         if fc and fc >= max_retries:
             try:
-                _set_pipeline_state(str(REPO_ROOT/'storage.db'), jira_issue, 'HUMAN_INTERVENTION', error=str(e), metadata={'failed_step': name, 'failure_count': fc})
+                _set_pipeline_state(str(REPO_ROOT/'storage.db'), jira_issue, 'HUMAN_INTERVENTION', error=str(e), metadata={'failed_step': name, 'failure_count': fc, 'classify': clf})
             except Exception:
                 pass
-            # notify via jira comment (include resume guidance)
+            # suggest automatic rollback or transition based on classifier if enabled
+            auto_rb = os.environ.get('ORCH_AUTO_ROLLBACK','true').lower() in ('1','true','yes')
+            action_taken = None
+            if auto_rb and clf.get('score',0.0) >= float(os.environ.get('ORCH_CLASSIFY_CONF_THRESHOLD','0.6')):
+                lbl = clf.get('label')
+                if lbl == 'code':
+                    # propose/perform transition to DEVELOPMENT
+                    _set_pipeline_state(str(REPO_ROOT/'storage.db'), jira_issue, 'DEVELOPMENT', metadata={'auto_from': 'HUMAN_INTERVENTION','reason': clf})
+                    log_agent_action('orchestrator','auto_transition',output_hash='DEVELOPMENT',related_issue=jira_issue,db_path=str(REPO_ROOT/'storage.db'))
+                    action_taken = 'auto_development'
+                elif lbl == 'design':
+                    _set_pipeline_state(str(REPO_ROOT/'storage.db'), jira_issue, 'DESIGN_REVIEW', metadata={'auto_from':'HUMAN_INTERVENTION','reason':clf})
+                    log_agent_action('orchestrator','auto_transition',output_hash='DESIGN_REVIEW',related_issue=jira_issue,db_path=str(REPO_ROOT/'storage.db'))
+                    action_taken = 'auto_design'
+                elif lbl == 'data':
+                    _set_pipeline_state(str(REPO_ROOT/'storage.db'), jira_issue, 'DATA_INVESTIGATION', metadata={'auto_from':'HUMAN_INTERVENTION','reason':clf})
+                    log_agent_action('orchestrator','auto_transition',output_hash='DATA_INVESTIGATION',related_issue=jira_issue,db_path=str(REPO_ROOT/'storage.db'))
+                    action_taken = 'auto_data'
+            # notify via jira comment (include resume guidance and classifier)
             if jira_issue:
-                notify_text = _build_plain_comment(name, 'human_intervention', summary=f'최대 재시도({max_retries}) 초과 — 인간 개입 필요: {e}', audit_id=audit_id)
-                # append explicit resume instruction in Korean
+                notify_text = _build_plain_comment(name, 'human_intervention', summary=f'최대 재시도({max_retries}) 초과 — 인간 개입 필요: {e}', audit_id=audit_id, artifacts=None)
                 notify_text = notify_text + "\n\n안내: 이 이슈에 '재실행해줘' 라는 코멘트를 남기면 Orchestrator가 HUMAN_INTERVENTION을 해제하고 파이프라인을 재시작합니다. (영어: 'resume')"
+                notify_text = notify_text + f"\n\n분류: {clf.get('label')} (score={clf.get('score')}) — {clf.get('reason')}"
+                if action_taken:
+                    notify_text = notify_text + f"\n\n자동 조치: {action_taken} (상세는 agent_audit 참조)"
                 _post_jira(jira_issue, notify_text)
                 log_agent_action('orchestrator', 'human_intervention_notified', output_hash=str(fc), related_issue=jira_issue, db_path=str(REPO_ROOT/'storage.db'))
         else:

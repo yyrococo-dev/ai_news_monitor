@@ -1,0 +1,35 @@
+name: Skill validate
+
+on:
+  pull_request:
+    paths:
+      - 'skills/dev_skill/**'
+      - 'dist/**'
+
+jobs:
+  validate-skill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Lint SKILL.md
+        run: |
+          python - <<'PY'
+import frontmatter,sys
+p='skills/dev_skill/SKILL.md'
+try:
+    post=frontmatter.load(p)
+    if 'name' not in post.metadata or 'description' not in post.metadata:
+        print('Missing frontmatter name/description')
+        sys.exit(2)
+    print('Frontmatter OK')
+except Exception as e:
+    print('SKILL.md parse error',e); sys.exit(2)
+PY
+      - name: Package check
+        run: |
+          echo 'Checking .skill exists in dist'
+          ls -l dist/dev_skill.skill

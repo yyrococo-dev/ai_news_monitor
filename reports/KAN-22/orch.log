@@ -1,0 +1,42 @@
+/Users/hom_mini/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+Reading dev_skill rules...
+# RULES — dev_skill 운영 룰(초안)
+
+이 문서는 dev_skill에서 적용할 운영 규칙의 초안입니다. 모든 개발자(사람)와 AI 에이전트는 아래 규칙을 준수해야 합니다.
+
+1) 승인 원칙
+- 외부 영향(텔레그램 전송, 대량 크롤링, 프로덕션 배포 등)은 명시적 승인 없이는 실행하지 않습니다.
+- 승인 방법: Jira 이슈에 '진행해줘' 코멘트를 작성하여 승인한다.
+
+2) 감사 로그
+- 모든 AI 액션은 다음 필드를 포함한 로그를 남깁니다:
+Performed change, file: /Users/hom_mini/dev/ai_news_monitor/dev_skill/examples/sample_change.txt
+Logged agent action to audit table
+Running integration smoke tests (simulated)
+Integration smoke tests passed
+Logged integrator action
+Orchestrator (dry-run) 시작
+[orchestrator] ai-product 시작...
+  → ai-product: 요구사항 및 우선순위 확인 (stub)
+[orchestrator] ai-product 완료.
+[orchestrator] ai-data 시작...
+  → ai-data: 데이터 스키마 및 정규화 확인 (stub)
+[orchestrator] ai-data 완료.
+[orchestrator] ai-dev 시작...
+[orchestrator] ai-dev 완료.
+[orchestrator] ai-integrator 시작...
+[orchestrator] ai-integrator 완료.
+[orchestrator] ai-qa 시작...
+  → ai-qa: E2E 시나리오 드라이런 (stub)
+[orchestrator] ai-qa 완료.
+[orchestrator] ai-ops 시작...
+  → ai-ops: 스테이징 배포 및 모니터링 (stub)
+[orchestrator] ai-ops 완료.
+[orchestrator] ai-legal 시작...
+  → ai-legal: robots.txt / TOS 검사 (stub)
+[orchestrator] ai-legal 완료.
+[orchestrator] ai-notifier 시작...
+  → ai-notifier: 알림 초안 드라이런 (stub)
+[orchestrator] ai-notifier 완료.
+Orchestrator 완료

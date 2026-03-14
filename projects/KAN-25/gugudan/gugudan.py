@@ -1,4 +1,4 @@
-from .core import build_full_output
+from gugudan.core import build_full_output
 
 
 def main():
